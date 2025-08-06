@@ -24,9 +24,9 @@ sf_df["p2"] = sf_df["To_Node_ID"].map(fire_prob_map)
 sf_df["w2"] = ((sf_df["p1"] + sf_df["p2"]) / 2) * sf_df["Length"]
 
 # === Step 5: BPR Delay (w3_forward, w3_backward) in MINUTES ===
-sf_df["Free_Speed_m_min"] = sf_df["Free_Speed"] * 1000 / 60
-sf_df["Capacity_veh_min"] = sf_df["Capacity"] / 60
-sf_df["t_ff"] = sf_df["Length"] / sf_df["Free_Speed_m_min"]
+sf_df["Free_Speed_m_min"] = sf_df["Free_Speed"] * 1000 / 60  # convert km/h to m/min
+sf_df["Capacity_veh_min"] = sf_df["Capacity"] / 60           # vehicles per minute
+sf_df["t_ff"] = sf_df["Length"] / sf_df["Free_Speed_m_min"]  # free-flow travel time in minutes
 
 np.random.seed(42)
 sf_df["Flow"] = np.random.uniform(0.1, 0.9, size=len(sf_df)) * sf_df["Capacity_veh_min"]
@@ -64,13 +64,26 @@ virtual_exit_edges = pd.DataFrame({
 weights_df = pd.concat([weights_df, virtual_exit_edges], ignore_index=True)
 weights_df = weights_df.sort_values(by=["From_Node_ID", "To_Node_ID"]).reset_index(drop=True)
 
-# === Step 8: Create directional flows ===
-flow_forward = sf_df[["From_Node_ID", "To_Node_ID", "Flow"]].copy()
-flow_backward = sf_df[["From_Node_ID", "To_Node_ID", "Flow_rev"]].copy()
+# === Step 8: Create directional flows with BPR details ===
+flow_forward = sf_df[[
+    "From_Node_ID", "To_Node_ID", "t_ff", "Flow", "Capacity_veh_min", "w3_forward"
+]].copy()
+flow_forward.rename(columns={
+    "t_ff": "Tff",
+    "w3_forward": "BPR_delay",
+    "Capacity_veh_min": "Capacity"
+}, inplace=True)
+
+flow_backward = sf_df[[
+    "From_Node_ID", "To_Node_ID", "t_ff", "Flow_rev", "Capacity_veh_min", "w3_backward"
+]].copy()
 flow_backward.rename(columns={
     "From_Node_ID": "To_Node_ID",
     "To_Node_ID": "From_Node_ID",
-    "Flow_rev": "Flow"
+    "t_ff": "Tff",
+    "Flow_rev": "Flow",
+    "w3_backward": "BPR_delay",
+    "Capacity_veh_min": "Capacity"
 }, inplace=True)
 
 flow_df = pd.concat([flow_forward, flow_backward], ignore_index=True)
@@ -83,6 +96,6 @@ flow_path = "/Users/stb34/Documents/wildfire/Experiments/San_Francisco/direction
 weights_df.to_csv(weights_path, index=False)
 flow_df.to_csv(flow_path, index=False)
 
-print(" Edge weights (with virtual exits) saved to:", weights_path)
+print("Edge weights (with virtual exits) saved to:", weights_path)
 print(" Flow-only file (real roads only) saved to:", flow_path)
-print("Exit nodes connected to virtual node 0:", exit_nodes)
+print(" Exit nodes connected to virtual node 0:", exit_nodes)
